@@ -1,0 +1,28 @@
+{
+  "name": "roku-wasd-remote",
+  "version": "1.0.0",
+  "description": "A modern Windows Roku remote built for WASD keyboard control.",
+  "main": "electron/roku-main.cjs",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "roku:build": "vite build --config vite.roku.config.ts",
+    "roku:start": "npm run roku:build && electron electron/roku-main.cjs",
+    "roku:dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-roku-portable.ps1"
+  },
+  "keywords": [
+    "roku",
+    "remote",
+    "wasd",
+    "electron",
+    "windows"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "electron": "^42.4.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  }
+}
