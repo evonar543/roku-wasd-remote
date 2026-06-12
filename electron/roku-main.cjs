@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("node:path");
 const dgram = require("node:dgram");
+const { spawn } = require("node:child_process");
 
 const ECP_PORT = 8060;
 const DISCOVERY_TIMEOUT_MS = 3200;
@@ -16,6 +17,8 @@ const XML_FIELDS = [
   "wifi-mac",
   "ethernet-mac"
 ];
+let voiceProcess = null;
+let voiceOwner = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -236,14 +239,149 @@ async function wakeDevice(device) {
   }
 }
 
+function voicePhrases() {
+  const base = [
+    "power on",
+    "power off",
+    "turn on",
+    "turn off",
+    "wake tv",
+    "go home",
+    "home",
+    "back",
+    "go back",
+    "select",
+    "ok",
+    "enter",
+    "pause",
+    "play",
+    "play pause",
+    "mute",
+    "search",
+    "menu",
+    "options",
+    "replay",
+    "rewind",
+    "fast forward",
+    "forward",
+    "channel up",
+    "channel down",
+    "volume up",
+    "volume down",
+    "turn volume up",
+    "turn volume down",
+    "input tuner",
+    "hdmi one",
+    "hdmi two",
+    "hdmi three",
+    "hdmi four"
+  ];
+  const directions = ["up", "down", "left", "right"];
+  const counts = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  const expanded = [];
+  for (const direction of directions) {
+    expanded.push(direction, `go ${direction}`, `move ${direction}`, `press ${direction}`);
+    for (const count of counts) {
+      expanded.push(`${direction} ${count}`, `go ${direction} ${count}`, `move ${direction} ${count}`, `press ${direction} ${count}`);
+    }
+  }
+  for (const count of counts) {
+    expanded.push(`volume up ${count}`, `volume down ${count}`, `channel up ${count}`, `channel down ${count}`);
+  }
+  return [...base, ...expanded];
+}
+
+function powershellArray(values) {
+  return values.map((value) => `"${value.replace(/"/g, "`\"")}"`).join(",");
+}
+
+function startVoiceRecognition(event) {
+  if (process.platform !== "win32") {
+    throw new Error("Live voice mode uses Windows Speech Recognition and needs Windows.");
+  }
+  if (voiceProcess) {
+    return { ok: true, listening: true };
+  }
+
+  voiceOwner = event.sender;
+  const phrases = powershellArray(voicePhrases());
+  const script = `
+$ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Speech
+$phrases = @(${phrases})
+$recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine
+$choices = New-Object System.Speech.Recognition.Choices
+$choices.Add([string[]]$phrases) | Out-Null
+$builder = New-Object System.Speech.Recognition.GrammarBuilder
+$builder.Append($choices)
+$grammar = New-Object System.Speech.Recognition.Grammar($builder)
+$recognizer.LoadGrammar($grammar)
+$recognizer.SetInputToDefaultAudioDevice()
+$recognizer.add_SpeechRecognized({
+  param($sender, $eventArgs)
+  $confidence = [Math]::Round($eventArgs.Result.Confidence, 3)
+  if ($confidence -ge 0.48) {
+    [Console]::Out.WriteLine("VOICE`t$confidence`t$($eventArgs.Result.Text)")
+    [Console]::Out.Flush()
+  }
+})
+[Console]::Out.WriteLine("READY`tWindows speech grammar loaded")
+[Console]::Out.Flush()
+$recognizer.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple)
+while ($true) { Start-Sleep -Milliseconds 250 }
+`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  voiceProcess = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded], {
+    windowsHide: true
+  });
+
+  voiceProcess.stdout.on("data", (chunk) => {
+    for (const line of chunk.toString("utf8").split(/\r?\n/)) {
+      if (!line.trim()) {
+        continue;
+      }
+      const [kind, confidence, text] = line.split("\t");
+      if (kind === "VOICE") {
+        voiceOwner?.send("roku:voice-result", { type: "command", confidence: Number(confidence), text });
+      } else if (kind === "READY") {
+        voiceOwner?.send("roku:voice-result", { type: "ready", text: confidence || "Voice ready" });
+      }
+    }
+  });
+
+  voiceProcess.stderr.on("data", (chunk) => {
+    voiceOwner?.send("roku:voice-result", { type: "error", text: chunk.toString("utf8").trim() });
+  });
+
+  voiceProcess.once("exit", () => {
+    voiceOwner?.send("roku:voice-result", { type: "stopped", text: "Voice stopped" });
+    voiceProcess = null;
+    voiceOwner = null;
+  });
+
+  return { ok: true, listening: true };
+}
+
+function stopVoiceRecognition() {
+  if (voiceProcess) {
+    voiceProcess.kill();
+    voiceProcess = null;
+  }
+  voiceOwner = null;
+  return { ok: true, listening: false };
+}
+
 ipcMain.handle("roku:discover", discoverRokus);
 ipcMain.handle("roku:connect", async (_event, target) => fetchDeviceInfo(normalizeDeviceTarget(target).toString()));
 ipcMain.handle("roku:key", (_event, device, key) => sendKey(device, key));
 ipcMain.handle("roku:text", (_event, device, text) => sendText(device, text));
 ipcMain.handle("roku:wake", (_event, device) => wakeDevice(device));
+ipcMain.handle("roku:voice-start", startVoiceRecognition);
+ipcMain.handle("roku:voice-stop", stopVoiceRecognition);
 
 app.whenReady().then(createWindow);
 app.on("window-all-closed", () => {
+  stopVoiceRecognition();
   if (process.platform !== "darwin") {
     app.quit();
   }
