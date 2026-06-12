@@ -321,11 +321,11 @@ $recognizer.add_SpeechRecognized({
   param($sender, $eventArgs)
   $confidence = [Math]::Round($eventArgs.Result.Confidence, 3)
   if ($confidence -ge 0.48) {
-    [Console]::Out.WriteLine("VOICE`t$confidence`t$($eventArgs.Result.Text)")
+    [Console]::Out.WriteLine("VOICE" + [char]9 + $confidence + [char]9 + $eventArgs.Result.Text)
     [Console]::Out.Flush()
   }
 })
-[Console]::Out.WriteLine("READY`tWindows speech grammar loaded")
+[Console]::Out.WriteLine("READY" + [char]9 + "Windows speech grammar loaded")
 [Console]::Out.Flush()
 $recognizer.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple)
 while ($true) { Start-Sleep -Milliseconds 250 }

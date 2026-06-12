@@ -5,7 +5,8 @@ $electronDist = Join-Path $root "node_modules\electron\dist"
 $rendererDist = Join-Path $root "roku-dist"
 $outputRoot = Join-Path $root "release"
 $appName = "Roku WASD Remote"
-$portableDir = Join-Path $outputRoot "Roku-WASD-Remote-win32-x64"
+$sourcePackage = Get-Content -Raw -LiteralPath (Join-Path $root "package.json") | ConvertFrom-Json
+$portableDir = Join-Path $outputRoot "Roku-WASD-Remote-v$($sourcePackage.version)-win32-x64"
 $appDir = Join-Path $portableDir "resources\app"
 
 function Assert-InRoot($PathToCheck) {
@@ -41,7 +42,6 @@ New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 Copy-Item -LiteralPath (Join-Path $root "electron") -Destination (Join-Path $appDir "electron") -Recurse -Force
 Copy-Item -LiteralPath $rendererDist -Destination (Join-Path $appDir "roku-dist") -Recurse -Force
 
-$sourcePackage = Get-Content -Raw -LiteralPath (Join-Path $root "package.json") | ConvertFrom-Json
 $runtimePackage = [ordered]@{
   name = "roku-wasd-remote"
   version = $sourcePackage.version

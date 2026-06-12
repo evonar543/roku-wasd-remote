@@ -1,6 +1,6 @@
 {
   "name": "roku-wasd-remote",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A modern Windows Roku remote built for WASD keyboard control.",
   "main": "electron/roku-main.cjs",
   "type": "module",

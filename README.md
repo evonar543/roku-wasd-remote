@@ -41,7 +41,7 @@ npm run roku:dist
 The portable app is written to:
 
 ```text
-release\Roku-WASD-Remote-win32-x64\Roku WASD Remote.exe
+release\Roku-WASD-Remote-v1.1.1-win32-x64\Roku WASD Remote.exe
 ```
 
 ## Run From Source
@@ -52,3 +52,4 @@ npm run roku:start
 ```
 
 The Roku and the PC must be on the same local network. If discovery does not find the TV, enter the Roku IP address manually.
+
